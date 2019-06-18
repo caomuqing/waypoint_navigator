@@ -33,7 +33,7 @@
 #include <waypoint_navigator/waypoint_navigator_node.h>
 
 namespace waypoint_navigator {
-const double WaypointNavigatorNode::kCommandTimerFrequency = 5.0;
+const double WaypointNavigatorNode::kCommandTimerFrequency = 2;
 const double WaypointNavigatorNode::kWaypointAchievementDistance = 0.5;
 const double WaypointNavigatorNode::kIntermediatePoseTolerance = 0.1;
 const int WaypointNavigatorNode::kDimensions = 3;
@@ -52,8 +52,8 @@ WaypointNavigatorNode::WaypointNavigatorNode(const ros::NodeHandle& nh,
 
   odometry_subscriber_ = nh_.subscribe(
       "odometry", 1, &WaypointNavigatorNode::odometryCallback, this);
-  pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>(
-      mav_msgs::default_topics::COMMAND_POSE, 1);
+  pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("waypoint", 1);
+      //mav_msgs::default_topics::COMMAND_POSE, 1);
   path_segments_publisher_ =
       nh_.advertise<mav_planning_msgs::PolynomialTrajectory4D>("path_segments", 1);
 
@@ -363,7 +363,7 @@ void WaypointNavigatorNode::publishCommands() {
                                                               &traj_with_yaw);
     mav_trajectory_generation::trajectoryToPolynomialTrajectoryMsg(
         traj_with_yaw, &msg);
-    path_segments_publisher_.publish(msg);
+    //path_segments_publisher_.publish(msg);
   }
 }
 

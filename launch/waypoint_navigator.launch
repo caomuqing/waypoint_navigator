@@ -13,7 +13,7 @@
       <remap from="odometry" to="ground_truth/odometry" />
     </node>
 
-    <node name="trajectory_sampler" pkg="mav_trajectory_generation_ros" type="trajectory_sampler_node" output="screen" />
+    <!-- <node name="trajectory_sampler" pkg="mav_trajectory_generation_ros" type="trajectory_sampler_node" output="screen" /> -->
   </group>
   
 </launch>

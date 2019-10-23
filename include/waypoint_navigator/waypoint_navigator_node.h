@@ -126,6 +126,7 @@ class WaypointNavigatorNode {
   void odometryCallback(const nav_msgs::OdometryConstPtr& odometry_message);
 
   static const double kCommandTimerFrequency;
+  static const double publishFrequency;
   // Distance before a waypoint is considered reached [m].
   static const double kWaypointAchievementDistance;
   // Minimum distance between intermediate waypoints [m].
@@ -146,6 +147,7 @@ class WaypointNavigatorNode {
   ros::Publisher path_points_marker_publisher_;
   ros::Publisher path_marker_publisher_;
   ros::Publisher polynomial_publisher_;
+  ros::Publisher poses_publisher_;
 
   ros::Subscriber odometry_subscriber_;
 
@@ -200,6 +202,7 @@ class WaypointNavigatorNode {
 
   // Path execution state (for pose publishing).
   size_t current_leg_;
+  size_t current_leg_wip_;
 
   // Path vertices and segments.
   mav_trajectory_generation::Trajectory polynomial_trajectory_;

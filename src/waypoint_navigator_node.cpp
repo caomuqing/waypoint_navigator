@@ -31,15 +31,18 @@
 #include <iostream>
 
 #include <waypoint_navigator/waypoint_navigator_node.h>
+#include <geometry_msgs/PoseArray.h>
 
 namespace waypoint_navigator {
-const double WaypointNavigatorNode::kCommandTimerFrequency = 2;
+const double WaypointNavigatorNode::kCommandTimerFrequency = 10;
+const double WaypointNavigatorNode::publishFrequency = 0.2;
 const double WaypointNavigatorNode::kWaypointAchievementDistance = 0.5;
 const double WaypointNavigatorNode::kIntermediatePoseTolerance = 0.1;
 const int WaypointNavigatorNode::kDimensions = 3;
 const int WaypointNavigatorNode::kDerivativeToOptimize =
     mav_trajectory_generation::derivative_order::ACCELERATION;
 const int WaypointNavigatorNode::kPolynomialCoefficients = 10;
+int constimer=0;
 
 WaypointNavigatorNode::WaypointNavigatorNode(const ros::NodeHandle& nh,
                                              const ros::NodeHandle& nh_private)
@@ -51,11 +54,12 @@ WaypointNavigatorNode::WaypointNavigatorNode(const ros::NodeHandle& nh,
   loadParameters();
 
   odometry_subscriber_ = nh_.subscribe(
-      "odometry", 1, &WaypointNavigatorNode::odometryCallback, this);
-  pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("waypoint", 1);
+      "/vins_estimator/odometry", 1, &WaypointNavigatorNode::odometryCallback, this);
+  pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1);
       //mav_msgs::default_topics::COMMAND_POSE, 1);
   path_segments_publisher_ =
       nh_.advertise<mav_planning_msgs::PolynomialTrajectory4D>("path_segments", 1);
+  poses_publisher_ = nh_.advertise<geometry_msgs::PoseArray>("waypoint_list", 1);
 
   // Visualization.
   path_points_marker_publisher_ = nh_.advertise<visualization_msgs::Marker>(
@@ -363,7 +367,7 @@ void WaypointNavigatorNode::publishCommands() {
                                                               &traj_with_yaw);
     mav_trajectory_generation::trajectoryToPolynomialTrajectoryMsg(
         traj_with_yaw, &msg);
-    //path_segments_publisher_.publish(msg);
+    path_segments_publisher_.publish(msg);
   }
 }
 
@@ -380,6 +384,7 @@ bool WaypointNavigatorNode::executePathCallback(
       << "No odometry received yet, can't start path following.";
   command_timer_.stop();
   current_leg_ = 0;
+  current_leg_wip_ = -1;
   timer_counter_ = 0;
 
   CHECK(loadPathFromFile()) << "Path could not be loaded!";
@@ -625,6 +630,8 @@ void WaypointNavigatorNode::poseTimerCallback(const ros::TimerEvent&) {
   const double dist_to_end =
       (coarse_waypoints_[current_leg_].position_W - odometry_.position_W)
           .norm();
+      //std::cout<<"x: "<<odometry_.position_W.x()<<"y: "<<odometry_.position_W.y()<<"z: "<<odometry_.position_W.z()<<"\n";
+      //std::cout<<"command x: "<<coarse_waypoints_[current_leg_].position_W.x()<<"y: "<<coarse_waypoints_[current_leg_].position_W.y()<<"z: "<<coarse_waypoints_[current_leg_].position_W.z()<<"\n";
 
   if (current_leg_ != coarse_waypoints_.size() - 1 &&
       dist_to_end < kWaypointAchievementDistance) {
@@ -637,20 +644,50 @@ void WaypointNavigatorNode::poseTimerCallback(const ros::TimerEvent&) {
     current_leg_++;
   }
 
-  geometry_msgs::PoseStamped pose;
-  pose.header.seq = timer_counter_;
-  pose.header.stamp = ros::Time::now();
-  pose.pose.position.x = coarse_waypoints_[current_leg_].position_W.x();
-  pose.pose.position.y = coarse_waypoints_[current_leg_].position_W.y();
-  pose.pose.position.z = coarse_waypoints_[current_leg_].position_W.z();
-  tf::Quaternion orientation = tf::createQuaternionFromRPY(
-      0.0, 0.0, coarse_waypoints_[current_leg_].getYaw());
-  pose.pose.orientation.x = orientation.x();
-  pose.pose.orientation.y = orientation.y();
-  pose.pose.orientation.z = orientation.z();
-  pose.pose.orientation.w = orientation.w();
+  if (current_leg_wip_ != current_leg_){
+    current_leg_wip_ = current_leg_; //set flag to be equal so it will not keep publishing
+    geometry_msgs::PoseStamped pose;
+    pose.header.seq = timer_counter_;
+    pose.header.stamp = ros::Time::now();
+    pose.pose.position.x = coarse_waypoints_[current_leg_].position_W.x();
+    pose.pose.position.y = coarse_waypoints_[current_leg_].position_W.y();
+    pose.pose.position.z = coarse_waypoints_[current_leg_].position_W.z();
+    tf::Quaternion orientation = tf::createQuaternionFromRPY(
+        0.0, 0.0, coarse_waypoints_[current_leg_].getYaw());
+    pose.pose.orientation.x = orientation.x();
+    pose.pose.orientation.y = orientation.y();
+    pose.pose.orientation.z = orientation.z();
+    pose.pose.orientation.w = orientation.w();
 
-  pose_publisher_.publish(pose);
+    pose_publisher_.publish(pose);
+  }
+
+  // constimer++;
+  // if (constimer>=kCommandTimerFrequency/publishFrequency){
+  //   constimer=0;
+  // if (constimer==0){
+  //   constimer=1;
+  //   geometry_msgs::PoseArray poses;
+  //   poses.header.frame_id = frame_id_;
+  //   poses.header.seq = timer_counter_;
+  //   poses.header.stamp = ros::Time::now();
+  //   geometry_msgs::Pose pose1;
+  //   // for(int k=0; k+current_leg_<coarse_waypoints_.size()&&k<7;k++){
+  //   for(int k=0; k+current_leg_<coarse_waypoints_.size();k++){
+  //     pose1.position.x = coarse_waypoints_[current_leg_+k].position_W.x();
+  //     pose1.position.y = coarse_waypoints_[current_leg_+k].position_W.y();
+  //     pose1.position.z = coarse_waypoints_[current_leg_+k].position_W.z();
+  //     orientation = tf::createQuaternionFromRPY(
+  //         0.0, 0.0, coarse_waypoints_[current_leg_+k].getYaw());
+  //     pose1.orientation.x = orientation.x();
+  //     pose1.orientation.y = orientation.y();
+  //     pose1.orientation.z = orientation.z();
+  //     pose1.orientation.w = orientation.w();
+  //     poses.poses.push_back(pose1);
+  //   }
+  //   poses_publisher_.publish(poses);
+  // }
+
   timer_counter_++;
 }
 

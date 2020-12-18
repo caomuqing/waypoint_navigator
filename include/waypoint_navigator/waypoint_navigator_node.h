@@ -39,6 +39,7 @@
 #include <Eigen/Eigen>
 #include <geodetic_utils/geodetic_conv.hpp>
 #include "tf/tf.h"
+#include  <nav_msgs/Path.h>
 
 #include <waypoint_navigator/ExecutePathFromFile.h>
 #include <waypoint_navigator/GoToHeight.h>
@@ -77,7 +78,7 @@ class WaypointNavigatorNode {
 
   // Deletes old polynomial trajectory markers.
   void deletePolynomialMarkers();
-
+  void path_input_cb(const nav_msgs::Path::ConstPtr& msg);
   // Service callbacks.
   // Starts the execution of a loaded path.
   bool executePathCallback(std_srvs::Empty::Request& request,
@@ -150,6 +151,7 @@ class WaypointNavigatorNode {
   ros::Publisher poses_publisher_;
 
   ros::Subscriber odometry_subscriber_;
+  ros::Subscriber path_input_sub_;
 
   ros::ServiceServer visualize_service_;
   ros::ServiceServer start_service_;

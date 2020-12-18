@@ -55,8 +55,12 @@ WaypointNavigatorNode::WaypointNavigatorNode(const ros::NodeHandle& nh,
 
   odometry_subscriber_ = nh_.subscribe(
       "/vins_estimator/odometry", 1, &WaypointNavigatorNode::odometryCallback, this);
-  pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1);
-      //mav_msgs::default_topics::COMMAND_POSE, 1);
+
+  path_input_sub_ = nh_.subscribe<nav_msgs::Path>("/NTU_internal/path_in_local_ref", //"/NTU_internal/path_in_local_ref", 
+      10, &WaypointNavigatorNode::path_input_cb, this);
+
+  pose_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>(//"/move_base_simple/goal", 1);
+      mav_msgs::default_topics::COMMAND_POSE, 1);
   path_segments_publisher_ =
       nh_.advertise<mav_planning_msgs::PolynomialTrajectory4D>("path_segments", 1);
   poses_publisher_ = nh_.advertise<geometry_msgs::PoseArray>("waypoint_list", 1);
@@ -769,6 +773,102 @@ void WaypointNavigatorNode::odometryCallback(
   }
   mav_msgs::eigenOdometryFromMsg(*odometry_message, &odometry_);
 }
+
+void WaypointNavigatorNode::path_input_cb(const nav_msgs::Path::ConstPtr& msg) //for st
+{
+  if (!got_odometry_){
+    ROS_WARN("NO ODOM, WILL NOT CALCULATE TRAJECTORY");
+    return;
+  }
+
+  command_timer_.stop();
+  current_leg_ = 0;
+  current_leg_wip_ = -1;
+  timer_counter_ = 0;
+
+  coarse_waypoints_.clear();
+  addCurrentOdometryWaypoint();
+
+  // Add (x,y,z) co-ordinates from file to path.
+  for (size_t i = 0; i < msg->poses.size(); i++) {
+    mav_msgs::EigenTrajectoryPoint cwp;
+    
+    // ENU path co-ordinates.
+    // coordinate_type_ == "enu"
+      cwp.position_W.x() = msg->poses[i].pose.position.x;
+      cwp.position_W.y() = msg->poses[i].pose.position.y;
+      cwp.position_W.z() = msg->poses[i].pose.position.z;
+    
+    coarse_waypoints_.push_back(cwp);
+  }
+
+  // Add heading from file to path.
+  for (size_t i = 1; i < coarse_waypoints_.size(); i++) {
+    if (heading_mode_ == "manual") {
+      tf::Quaternion _tmp(msg->poses[i-1].pose.orientation.x,
+        msg->poses[i-1].pose.orientation.y,
+        msg->poses[i-1].pose.orientation.z,
+        msg->poses[i-1].pose.orientation.w);
+            tf::Matrix3x3 mm(_tmp);
+      double _roll, _pitch, _yaw;            
+      mm.getRPY(_roll, _pitch, _yaw);
+      coarse_waypoints_[i].setFromYaw(_yaw);
+
+
+    } else if (heading_mode_ == "auto") {
+      // Compute heading in direction towards next point.
+      coarse_waypoints_[i].setFromYaw(
+          atan2(coarse_waypoints_[i].position_W.y() -
+                    coarse_waypoints_[i - 1].position_W.y(),
+                coarse_waypoints_[i].position_W.x() -
+                    coarse_waypoints_[i - 1].position_W.x()));
+    } else if (heading_mode_ == "zero") {
+      coarse_waypoints_[i].setFromYaw(0.0);
+    }
+  }
+
+  // As first target point, add current (x,y) position, but with height at
+  // that of the first requested waypoint, so that the MAV first adjusts height
+  // moving only vertically.
+  if (coarse_waypoints_.size() >= 2) {
+    mav_msgs::EigenTrajectoryPoint vwp;
+    vwp.position_W.x() = odometry_.position_W.x();
+    vwp.position_W.y() = odometry_.position_W.y();
+    vwp.position_W.z() = coarse_waypoints_[1].position_W.z();
+    if (heading_mode_ == "zero") {
+      vwp.setFromYaw(0.0);
+    } else if (heading_mode_ == "manual") {
+      // Do not change heading.
+      vwp.orientation_W_B = coarse_waypoints_[0].orientation_W_B;
+    }
+    coarse_waypoints_.insert(coarse_waypoints_.begin() + 1, vwp);
+  }
+
+  // Limit maximum distance between waypoints.
+  if (intermediate_poses_) {
+    addIntermediateWaypoints();
+  }
+
+  LOG(INFO) << "Path loaded from msg. Number of points in path: "
+            << coarse_waypoints_.size();
+
+  current_leg_ = 0;
+
+  // Display the path markers in rviz.
+  if (path_mode_ == "polynomial") {
+    createTrajectory();
+  }
+
+  visualization_timer_ =
+      nh_.createTimer(ros::Duration(0.1),
+                      &WaypointNavigatorNode::visualizationTimerCallback, this);
+
+  publishCommands();
+  LOG(INFO) << "Starting path execution...";
+
+  return;
+}
+
 }
 
 int main(int argc, char** argv) {
@@ -784,3 +884,4 @@ int main(int argc, char** argv) {
   ros::spin();
   return 0;
 }
+

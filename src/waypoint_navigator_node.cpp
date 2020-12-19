@@ -502,7 +502,7 @@ bool WaypointNavigatorNode::goToWaypointsCallback(
 
   // Display the path markers in rviz.
   visualization_timer_ =
-      nh_.createTimer(ros::Duration(0.1),
+      nh_.createTimer(ros::Duration(1.0),
                       &WaypointNavigatorNode::visualizationTimerCallback, this);
   publishCommands();
   return true;
@@ -548,7 +548,7 @@ bool WaypointNavigatorNode::goToPoseWaypointsCallback(
     LOG(INFO) << coarse_waypoints_.size()<<" waypoints received.";
     // Display the path markers in rviz.
     visualization_timer_ =
-      nh_.createTimer(ros::Duration(0.1),
+      nh_.createTimer(ros::Duration(1.0),
                       &WaypointNavigatorNode::visualizationTimerCallback, this);
     publishCommands();
   }else{
@@ -623,7 +623,7 @@ bool WaypointNavigatorNode::visualizePathCallback(
   }
 
   visualization_timer_ =
-      nh_.createTimer(ros::Duration(0.1),
+      nh_.createTimer(ros::Duration(1.0),
                       &WaypointNavigatorNode::visualizationTimerCallback, this);
   return true;
 }
@@ -860,7 +860,7 @@ void WaypointNavigatorNode::path_input_cb(const nav_msgs::Path::ConstPtr& msg) /
   }
 
   visualization_timer_ =
-      nh_.createTimer(ros::Duration(0.1),
+      nh_.createTimer(ros::Duration(1.0),
                       &WaypointNavigatorNode::visualizationTimerCallback, this);
 
   publishCommands();
